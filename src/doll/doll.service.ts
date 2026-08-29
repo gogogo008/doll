@@ -360,12 +360,38 @@ export class DollService {
       }
     }
 
-    let audioContent: string | null = null;
-    if (!child.isMuted) {
-      console.log(`🔊 [TTS Generation] 대답 음성 합성(gTTS) 시작: "${selectedReply}"`);
-      audioContent = await this.synthesizeSpeech(selectedReply);
+    // [MODIFIED] 기존 Base64 대신 Supabase Storage에 업로드 후 aiAudioUrl 획득
+    let aiAudioUrl: string | null = null;
+    if (!child.isMuted && selectedReply) {
+      try {
+        console.log(`🔊 [TTS Generation] 대답 음성 합성(gTTS) 시작: "${selectedReply}"`);
+        const mp3Buffer = await this.synthesizeSpeechToBuffer(selectedReply);
+        
+        const aiVoiceFileName = `${deviceId}/ai_${Date.now()}.mp3`;
+        console.log(`📤 [Supabase Storage] AI 음성 업로드 시도 중... 경로: voice-bucket/${aiVoiceFileName}`);
+
+        const { data: uploadData, error: uploadError } = await this.supabase.storage
+          .from('voice-bucket')
+          .upload(aiVoiceFileName, mp3Buffer, {
+            contentType: 'audio/mp3',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('❌ [Supabase Storage AI 음성 업로드 실패]:', JSON.stringify(uploadError));
+        } else {
+          const { data: publicUrlData } = this.supabase.storage
+            .from('voice-bucket')
+            .getPublicUrl(aiVoiceFileName);
+          
+          aiAudioUrl = publicUrlData.publicUrl;
+          console.log(`💾 [Supabase Storage] AI 음성 업로드 성공! URL: ${aiAudioUrl}`);
+        }
+      } catch (ttsErr) {
+        console.error('❌ [TTS & Storage 예외 발생]:', ttsErr);
+      }
     } else {
-      console.log(`🔇 [TTS Generation] 음소거 모드(isMuted=true)로 음성 합성 건너뜀`);
+      console.log(`🔇 [TTS Generation] 음소거 모드이거나 대답이 없어 음성 합성을 건너뜀`);
     }
 
     const newInteraction = this.interactionRepository.create({
@@ -399,9 +425,9 @@ export class DollService {
       success: true,
       interactionId: savedInteraction.id,
       audioUrl: audioUrl,
+      aiAudioUrl: aiAudioUrl, // [MODIFIED] Base64 대신 URL 전달
       ...aiAnalysis,
       selectedReply,
-      audioData: audioContent,
     };
   }
 
@@ -422,14 +448,15 @@ export class DollService {
     this.dollGateway.sendParentMessageToDevice(deviceId, {
       type: 'parent_message',
       text: text,
-      audio: result.audioData, 
+      aiAudioUrl: result.aiAudioUrl, // [MODIFIED] Base64 대신 aiAudioUrl 전달
       action: result.action || 2,
     });
 
     return { success: true, message: '보호자 메시지가 인형에 전송되었습니다.' };
   }
 
-  async synthesizeSpeech(text: string): Promise<string> {
+  // [MODIFIED] gTTS 결과를 Buffer로 반환하는 메서드로 변경
+  async synthesizeSpeechToBuffer(text: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       const gtts = new gTTS(text, 'ko');
@@ -440,8 +467,8 @@ export class DollService {
       stream.on('end', () => {
         const audioBuffer = Buffer.concat(chunks);
         const elapsedTime = Date.now() - startTime;
-        console.log(`✅ [gTTS Success] mp3 생성 완료 (${audioBuffer.length} bytes, Base64 변환 성공, 소요시간: ${elapsedTime}ms)`);
-        resolve(audioBuffer.toString('base64'));
+        console.log(`✅ [gTTS Success] mp3 생성 완료 (${audioBuffer.length} bytes, 소요시간: ${elapsedTime}ms)`);
+        resolve(audioBuffer);
       });
       stream.on('error', (err) => {
         console.error(`❌ [gTTS Error] 음성 합성 실패:`, err);

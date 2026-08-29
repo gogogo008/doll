@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { DollService } from './doll.service';
-import { Injectable, Inject, forwardRef } from '@nestjs/common'; // 👈 Inject, forwardRef 추가
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 
 interface ClientSession {
   deviceId: string;
@@ -228,6 +228,7 @@ export class DollGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const elapsedTime = Date.now() - startTime;
       console.log(`✅ [AudioEnd 성공] 상호작용 처리 완료 (총 소요시간: ${elapsedTime}ms) - Device: ${session.deviceId}`);
 
+      // 서비스에서 반환하는 결과에 aiAudioUrl(Supabase 퍼블릭 URL)이 포함되어 클라이언트에 그대로 전달됩니다.
       client.emit('ai_response', result);
 
     } catch (error: any) {
@@ -251,7 +252,7 @@ export class DollGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * 💡 [신규 추가] 서비스 계층에서 보호자 메시지를 특정 기기(Room)로 푸시할 때 호출하는 메서드
+   * 💡 서비스 계층에서 보호자 메시지를 특정 기기(Room)로 푸시할 때 호출하는 메서드
    */
   sendParentMessageToDevice(deviceId: string, payload: any) {
     try {
