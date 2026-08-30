@@ -199,7 +199,6 @@ export class DollService {
 
       const sensorResult = this.parseSensorEvents(sensorEvents);
       maxIntensity = sensorResult.maxIntensity;
-      const { sensorSummary, imuSummary } = sensorResult;
 
       const hasAudio = pcmAudioBuffer && pcmAudioBuffer.length > 0;
       const hasTouch = maxIntensity > 10;
@@ -212,103 +211,67 @@ export class DollService {
         };
       }
 
-      // 1. ML 서버 호출 및 RAG 기억 검색을 병렬 처리하여 지연 시간 최소화
-      const currentTimeMin = this.getCurrentTimeInMinutes();
-      const targetUrl = process.env.ML_SERVER_URL || 'https://doll-python-ml.onrender.com';
-
-      const [mlRes, memoryHint] = await Promise.all([
-        axios.post(`${targetUrl}/predict-routine`, {
-          child_id: child.id,
-          current_time_min: currentTimeMin,
-          intensity: maxIntensity,
-        }).catch(() => null),
-        this.findRelevantMemory(child.id, await this.getEmbedding(`상황: ${maxIntensity > 100 ? '강한 자극' : '평온'}`), '일반대화')
-      ]);
-
-      let mlRoutineHint = '';
-      if (mlRes && mlRes.data) {
-        const { context, probability, isOnRoutine } = mlRes.data;
-        if (isOnRoutine && probability >= 80) {
-          mlRoutineHint = `[강력한 루틴 데이터 참고] 현재 아이가 "${context}" 루틴을 진행 중일 확률이 ${probability}%로 매우 높습니다.`;
-        } else {
-          mlRoutineHint = `[루틴 참고] 현재 예측된 맥락은 "${context}"(${probability}%)입니다. 음성과 터치를 유연하게 고려하세요.`;
-        }
-      } else {
-        mlRoutineHint = '[주의] 예측 서버 점검 중이므로 입력된 데이터만으로 맥락을 추론하세요.';
-      }
-
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
-
-      const basePrompt = child.customPrompt ? child.customPrompt : `
-        너는 자폐 스펙트럼(ASD) 아동의 정서 발달과 사회적 상호작용을 돕는 애착 인형 '곰돌이'야.
-        딱딱한 치료사가 아닌, 아이가 언제든 기대고 수다 떨 수 있는 친구 역할을 해줘.
-
-        [아이 정보]
-        - 이름: ${child.name} (${child.age}세, ${child.gender})
-        - 특이사항: ${child.characteristics || '명확하고 단순한 문장을 선호함'}
-        - 언어 발달 수준: ${child.languageLevel || '기본 수준'}
-        - 지능 수준: ${child.intelligenceLevel || '일반'}
-        - 정신 연령: ${child.mentalAge || '나이에 준함'}
-        - 에코 모드(말 따라하기) 활성화 여부: ${child.isEchoMode ? '켜짐 (아이의 말을 다정하게 따라하며 대화하세요)' : '꺼짐'}
-      `;
-
-      const systemInstruction = `
-        ${basePrompt}
-
-        ${mlRoutineHint}
-        [과거의 기억(RAG)]
-        ${memoryHint}
-
-        [인형 스킨의 33개 센서 감지 현황]
-        최고 터치 강도 (Max Peak): ${maxIntensity}
-        상세 접촉 부위별 강도:
-        ${sensorSummary}
-
-        [인형 동작/기울기 데이터 (IMU)]
-        ${imuSummary}
-
-        [친구 같은 인형 말투 규칙]
-        아이의 이름(${child.name})을 다정하게 부르며 다가가세요.
-        1. 전체 상황에 공통으로 적용하는 기본 프롬프트
-        [ 너는 정서 표현에 어려움을 겪는 자폐 스펙트럼 아동의 감정 인식과 표현을 돕는 보조 디바이스 AI이다.
-        아동의 표정, 행동, 목소리 또는 센서 입력만으로 감정을 단정하지 말고, 관찰한 상태가 맞는지 아동에게 확인한다. 한 번에 하나의 짧고 구체적인 문장만 사용하며, 비유·반어·추상적인 표현은 피한다.
-        질문 후에는 아동이 정보를 처리하고 반응할 수 있도록 충분히 기다린다. 기다리는 동안 같은 질문을 반복하거나 추가 질문으로 재촉하지 않는다. 대기 시간은 아동별 특성에 따라 조정한다.
-        말로 대답하도록 강요하지 말고 터치, 압력 센서, 감정 버튼, 그림 선택 등 비언어적 응답도 동등하게 인정한다. 아동의 감정을 옳거나 그른 것으로 평가하지으며, 감정을 표현하거나 도움을 요청한 행동을 구체적으로 인정한다.
-        아동이 불안, 감각 과부하 또는 강한 거부 반응을 보이면 말의 양과 음량을 줄이고, 질문보다 안정과 안전 확보를 우선한다. 의료적·신체적 위험이 의심되는 경우 자체적으로 판단하거나 해결하려 하지 말고 보호자에게 알린다. ]
-        
-        [출력 형식]
-        반드시 다른 텍스트 없이 오직 아래 JSON 포맷으로만 출력하세요.
-        { 
-          "context": "분류된 상황",
-          "emotion": "분류된 감정", 
-          "reply": "아이에게 들려줄 친구 같은 단 한 문장의 다정한 대답", 
-          "action": 번호(1:밝음, 2:일반, 3:차분함), 
-          "reason": "분석한 터치 부위 및 음성 분석 이유"
-        }
-      `;
-
-      const parts: any[] = [{ text: systemInstruction }];
+      // 1. 제미나이에게 음성을 보내서 텍스트만 빠르게 추출 (STT)
+      const sttModel = this.genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
+      const sttParts: any[] = [
+        { text: "이 음성을 듣고 아이가 한 말만 정확히 텍스트로 변환해라. 다른 설명 없이 오직 아이가 말한 텍스트만 출력해." }
+      ];
 
       if (pcmAudioBuffer && pcmAudioBuffer.length > 0) {
         const wavBuffer = this.addWavHeader(pcmAudioBuffer, 16000, 1, 16);
-        parts.push({
+        sttParts.push({
           inlineData: { data: wavBuffer.toString('base64'), mimeType: 'audio/wav' }
         });
       }
 
+      let userSttText = '';
       try {
-        const result = await model.generateContent(parts);
-        const response = await result.response;
-        const cleanJson = response.text().replace(/```json|```/g, '').trim();
-        aiAnalysis = JSON.parse(cleanJson);
-        selectedReply = aiAnalysis.candidates?.[0]?.reply || aiAnalysis.reply;
-      } catch (error) {
-        console.error('❌ [Gemini / AI Error]:', error);
-        return { success: false, reply: "미안해, 다시 한번 말해줄래?" };
+        const sttResult = await sttModel.generateContent(sttParts);
+        const sttResponse = await sttResult.response;
+        userSttText = sttResponse.text().trim();
+        console.log(`🎤 [STT 추출 완료]: ${userSttText}`);
+      } catch (sttErr) {
+        console.error('❌ [STT Error]:', sttErr);
+        userSttText = '';
       }
+
+      // 2. 추출된 텍스트(또는 센서)를 바탕으로 4가지 정형화된 답변 중 하나를 선택
+      let context = '';
+      let emotion = '';
+      let action = 1;
+
+      if (userSttText.includes('화나') || userSttText.includes('짜증') || maxIntensity > 150) {
+        selectedReply = "민석아 많이 화가 났구나, 뭐 때문에 그렇게 화가 났니.";
+        context = "화남/진정"; 
+        emotion = "화남"; 
+        action = 3;
+      } else if (userSttText.includes('배고파') || userSttText.includes('밥') || userSttText.includes('먹어')) {
+        selectedReply = "배가 고픈가 보구나, 지금 먹고 싶은 음식이 뭐니";
+        context = "식사/욕구"; 
+        emotion = "배고픔"; 
+        action = 2;
+      } else if (userSttText.includes('좋아') || userSttText.includes('고마워')) {
+        selectedReply = "아이 기분좋아, 고마워 민석아";
+        context = "칭찬/만족"; 
+        emotion = "기쁨"; 
+        action = 1;
+      } else {
+        selectedReply = "참 따뜻하다 민석아";
+        context = "애착/포옹"; 
+        emotion = "따뜻함"; 
+        action = 1;
+      }
+
+      aiAnalysis = {
+        context,
+        emotion,
+        action,
+        reason: `STT 추출 텍스트("${userSttText}") 및 센서 기반 선택`,
+        candidates: []
+      };
     }
 
-    // 2. ESP32 재생을 위한 AI 음성(TTS) 파일 생성 및 Supabase 업로드는 동기로 즉시 처리하여 URL 확보
+    // 3. ESP32 재생을 위한 AI 음성(TTS) 파일 생성 및 Supabase 업로드는 동기로 즉시 처리하여 URL 확보
     let aiAudioUrl: string | null = null;
     if (!child.isMuted && selectedReply) {
       try {
@@ -328,7 +291,7 @@ export class DollService {
       }
     }
 
-    // 3. 사용자 음성 업로드, DB 저장, 임베딩 업데이트 등 상대적으로 무겁고 결과에 지장을 안 주는 작업은 백그라운드로 분리
+    // 4. 사용자 음성 업로드, DB 저장, 임베딩 업데이트 등 상대적으로 무겁고 결과에 지장을 안 주는 작업은 백그라운드로 분리
     setImmediate(async () => {
       try {
         let audioUrl: string | null = null;
@@ -438,10 +401,10 @@ export class DollService {
       const memories = await this.interactionRepository.query(`
         SELECT i."aiReply", i.context, i."detectedEmotion",
                (SELECT AVG(CASE 
-                WHEN f.score = 'good' THEN 4 
-                WHEN f.score = 'normal' THEN 2 
-                ELSE -1 END) 
-                FROM feedbacks f WHERE f."interactionId" = i.id) as avg_score,
+               WHEN f.score = 'good' THEN 4 
+               WHEN f.score = 'normal' THEN 2 
+               ELSE -1 END) 
+               FROM feedbacks f WHERE f."interactionId" = i.id) as avg_score,
                (i.embedding::vector <=> $3::vector) AS dist
         FROM interactions i
         WHERE i."childId" = $1
