@@ -259,7 +259,7 @@ export class DollService {
           child_id: child.id,
           current_time_min: currentTimeMin,
           intensity: maxIntensity,
-        });
+        }, { timeout: 2000 });
 
         const { context, probability, isOnRoutine } = mlResponse.data;
         predictedContext = context;
@@ -323,25 +323,20 @@ export class DollService {
           "emotion": "분류된 감정", 
           "reply": "아이에게 들려줄 친구 같은 단 한 문장의 다정한 대답", 
           "action": 번호(1:밝음, 2:일반, 3:차분함), 
-          "reason": "분석한 터치 부위 및 음성 분석 이유",
-          "candidates": [
-            { "reply": "...", "style": "공감" },
-            { "reply": "...", "style": "지도" },
-            { "reply": "...", "style": "놀이" }
-          ]
+          "reason": "분석한 터치 부위 및 음성 분석 이유"
         }
       `;
 
       const parts: any[] = [{ text: systemInstruction }];
 
-      if (pcmAudioBuffer && pcmAudioBuffer.length > 0) {
+      if (hasAudio) {
         const wavBuffer = this.addWavHeader(pcmAudioBuffer, 16000, 1, 16);
         parts.push({
-          inlineData: { data: wavBuffer.toString('base64'), mimeType: 'audio/wav' }
+          inlineData: {
+            data: wavBuffer.toString('base64'),
+            mimeType: 'audio/wav',
+          },
         });
-        console.log(`🤖 [Gemini Payload] 멀티모달 오디오 바이너리 패킷 전달 준비 완료 (${wavBuffer.length} bytes Base64 인코딩)`);
-      } else {
-        console.log(`🤖 [Gemini Payload] 음성 바이너리 없음 (텍스트 및 센서 전용 전달)`);
       }
 
       try {
@@ -360,7 +355,6 @@ export class DollService {
       }
     }
 
-    // [MODIFIED] 기존 Base64 대신 Supabase Storage에 업로드 후 aiAudioUrl 획득
     let aiAudioUrl: string | null = null;
     if (!child.isMuted && selectedReply) {
       try {
@@ -425,7 +419,7 @@ export class DollService {
       success: true,
       interactionId: savedInteraction.id,
       audioUrl: audioUrl,
-      aiAudioUrl: aiAudioUrl, // [MODIFIED] Base64 대신 URL 전달
+      aiAudioUrl: aiAudioUrl,
       ...aiAnalysis,
       selectedReply,
     };
@@ -448,14 +442,13 @@ export class DollService {
     this.dollGateway.sendParentMessageToDevice(deviceId, {
       type: 'parent_message',
       text: text,
-      aiAudioUrl: result.aiAudioUrl, // [MODIFIED] Base64 대신 aiAudioUrl 전달
+      aiAudioUrl: result.aiAudioUrl,
       action: result.action || 2,
     });
 
     return { success: true, message: '보호자 메시지가 인형에 전송되었습니다.' };
   }
 
-  // [MODIFIED] gTTS 결과를 Buffer로 반환하는 메서드로 변경
   async synthesizeSpeechToBuffer(text: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
@@ -528,15 +521,6 @@ export class DollService {
       console.error("DB 검색 에러:", err);
       return "기억 검색 중 오류 발생.";
     }
-  }
-
-  async applyFeedback(interactionId: number, selectedReply: string, score: 'good' | 'normal' | 'bad') {
-    const feedback = this.feedbackRepository.create({
-      interaction: { id: interactionId },
-      selectedReply,
-      score
-    });
-    await this.feedbackRepository.save(feedback);
   }
 
   async embedAllExistingInteractions() {

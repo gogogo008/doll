@@ -31,7 +31,7 @@ export class Interaction {
   aiReply!: string;
 
   @Column({ nullable: true })
-  audioUrl!: string;
+  audioUrl?: string;
 
   
   
