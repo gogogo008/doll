@@ -7,7 +7,6 @@ import { Child } from '../entities/child.entity';
 import { Feedback } from '../entities/feedback.entity';
 import { Inject, forwardRef } from '@nestjs/common';
 import { DollGateway } from './doll.gateway';
-import gTTS = require('gtts');
 import axios from 'axios';
 
 const SENSOR_NAMES = [
@@ -156,11 +155,6 @@ export class DollService {
     };
   }
 
-  /**
-   * 🚀 최적화된 인터랙션 처리:
-   * 1. AI 텍스트 생성 및 TTS 음성 파일 생성/업로드(aiAudioUrl 확보)까지는 즉시 수행하여 ESP32에 바로 전달
-   * 2. DB 저장, 사용자 음성 파일 백업, RAG 임베딩 업데이트는 백그라운드(setImmediate)로 분리
-   */
   async processFullInteraction(
     deviceId: string,
     pcmAudioBuffer?: Buffer,
@@ -178,11 +172,21 @@ export class DollService {
     }
 
     let selectedReply = '';
+    let aiAudioUrl: string | null = null;
     let aiAnalysis: any = {};
     let maxIntensity = 0;
 
+    const VOICE_URLS = {
+      warm: "https://trwgaxzjvxdjjzxfommg.supabase.co/storage/v1/object/public/voice-bucket/1/ai_1788093384500.mp3",
+      hungry: "https://trwgaxzjvxdjjzxfommg.supabase.co/storage/v1/object/public/voice-bucket/1/ai_1788093350443.mp3",
+      angry: "https://trwgaxzjvxdjjzxfommg.supabase.co/storage/v1/object/public/voice-bucket/1/ai_1788093270914.mp3",
+      intense: "https://trwgaxzjvxdjjzxfommg.supabase.co/storage/v1/object/public/voice-bucket/1/ai_1788098422152.mp3",
+      happy: "https://trwgaxzjvxdjjzxfommg.supabase.co/storage/v1/object/public/voice-bucket/1/ai_1788096416732.mp3"
+    };
+
     if (parentMessage && parentMessage.trim() !== '') {
       selectedReply = parentMessage;
+      aiAudioUrl = VOICE_URLS.happy;
       aiAnalysis = {
         context: '보호자 직접 메시지',
         emotion: '안정',
@@ -211,7 +215,7 @@ export class DollService {
         };
       }
 
-      // 1. 제미나이에게 음성을 보내서 텍스트만 빠르게 추출 (STT)
+      // 1. 제미나이에게 음성을 보내서 텍스트만 추출 (STT)
       const sttModel = this.genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' });
       const sttParts: any[] = [
         { text: "이 음성을 듣고 아이가 한 말만 정확히 텍스트로 변환해라. 다른 설명 없이 오직 아이가 말한 텍스트만 출력해." }
@@ -235,30 +239,46 @@ export class DollService {
         userSttText = '';
       }
 
-      // 2. 추출된 텍스트(또는 센서)를 바탕으로 4가지 정형화된 답변 중 하나를 선택
+      // 2. 추출된 텍스트와 센서 기반으로 5가지 상황 분류 및 지정된 URL 매핑
       let context = '';
       let emotion = '';
       let action = 1;
 
-      if (userSttText.includes('화나') || userSttText.includes('짜증') || maxIntensity > 150) {
-        selectedReply = "민석아 많이 화가 났구나, 뭐 때문에 그렇게 화가 났니.";
-        context = "화남/진정"; 
-        emotion = "화남"; 
+      if (maxIntensity > 150) {
+        selectedReply = "강한 자극";
+        aiAudioUrl = VOICE_URLS.intense;
+        context = "강한 자극";
+        emotion = "놀람/강한자극";
         action = 3;
-      } else if (userSttText.includes('배고') || userSttText.includes('밥') || userSttText.includes('먹')) {
-        selectedReply = "배가 고픈가 보구나, 지금 먹고 싶은 음식이 뭐니";
-        context = "식사/욕구"; 
-        emotion = "배고픔"; 
+      } else if (userSttText.includes('화나') || userSttText.includes('짜증')) {
+        selectedReply = "화남";
+        aiAudioUrl = VOICE_URLS.angry;
+        context = "화남/진정";
+        emotion = "화남";
+        action = 3;
+      } else if (userSttText.includes('배고파') || userSttText.includes('밥') || userSttText.includes('먹어')) {
+        selectedReply = "배고프다";
+        aiAudioUrl = VOICE_URLS.hungry;
+        context = "식사/욕구";
+        emotion = "배고픔";
         action = 2;
-      } else if (userSttText.includes('슬퍼') || userSttText.includes('속상')) {
-        selectedReply = "아이 기분좋아, 고마워 민석아";
-        context = "칭찬/만족"; 
-        emotion = "기쁨"; 
+      } else if (userSttText.includes('따뜻') || userSttText.includes('안아')) {
+        selectedReply = "따뜻하다";
+        aiAudioUrl = VOICE_URLS.warm;
+        context = "애착/포옹";
+        emotion = "따뜻함";
+        action = 1;
+      } else if (userSttText.includes('좋아') || userSttText.includes('고마워')) {
+        selectedReply = "기분 좋아";
+        aiAudioUrl = VOICE_URLS.happy;
+        context = "칭찬/만족";
+        emotion = "기쁨";
         action = 1;
       } else {
-        selectedReply = "아야! 약간 아팠어, 조금만 살살 만져줄래?";
-        context = "애착/포옹"; 
-        emotion = "따뜻함"; 
+        selectedReply = "기분 좋아";
+        aiAudioUrl = VOICE_URLS.happy;
+        context = "기본/기분좋아";
+        emotion = "기쁨";
         action = 1;
       }
 
@@ -271,27 +291,7 @@ export class DollService {
       };
     }
 
-    // 3. ESP32 재생을 위한 AI 음성(TTS) 파일 생성 및 Supabase 업로드는 동기로 즉시 처리하여 URL 확보
-    let aiAudioUrl: string | null = null;
-    if (!child.isMuted && selectedReply) {
-      try {
-        const mp3Buffer = await this.synthesizeSpeechToBuffer(selectedReply);
-        const aiVoiceFileName = `${deviceId}/ai_${Date.now()}.mp3`;
-        const { error: aiUploadError } = await this.supabase.storage
-          .from('voice-bucket')
-          .upload(aiVoiceFileName, mp3Buffer, { contentType: 'audio/mp3', upsert: false });
-
-        if (!aiUploadError) {
-          const { data: publicUrlData } = this.supabase.storage.from('voice-bucket').getPublicUrl(aiVoiceFileName);
-          aiAudioUrl = publicUrlData.publicUrl;
-          console.log(`🔊 [AI Voice URL]: ${aiAudioUrl}`);
-        }
-      } catch (ttsErr) {
-        console.error('❌ [TTS Generation/Upload Error]:', ttsErr);
-      }
-    }
-
-    // 4. 사용자 음성 업로드, DB 저장, 임베딩 업데이트 등 상대적으로 무겁고 결과에 지장을 안 주는 작업은 백그라운드로 분리
+    // 3. 사용자 음성 업로드, DB 저장, 임베딩 업데이트 등은 백그라운드로 분리
     setImmediate(async () => {
       try {
         let audioUrl: string | null = null;
@@ -337,7 +337,7 @@ export class DollService {
       success: true,
       ...aiAnalysis,
       selectedReply,
-      aiAudioUrl, // ESP32가 즉시 재생할 수 있도록 생성된 음성 URL 포함 반환
+      aiAudioUrl, 
     };
   }
 
@@ -363,18 +363,6 @@ export class DollService {
     });
 
     return { success: true, message: '보호자 메시지가 인형에 전송되었습니다.' };
-  }
-
-  async synthesizeSpeechToBuffer(text: string): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const gtts = new gTTS(text, 'ko');
-      const chunks: Buffer[] = [];
-      const stream = gtts.stream();
-      
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
-      stream.on('error', (err) => reject(err));
-    });
   }
 
   private async getEmbedding(text: string): Promise<string> {
