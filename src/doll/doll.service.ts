@@ -237,7 +237,7 @@ export class DollService {
         mlRoutineHint = '[주의] 예측 서버 점검 중이므로 입력된 데이터만으로 맥락을 추론하세요.';
       }
 
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-3-flash' });
 
       const basePrompt = child.customPrompt ? child.customPrompt : `
         너는 자폐 스펙트럼(ASD) 아동의 정서 발달과 사회적 상호작용을 돕는 애착 인형 '곰돌이'야.
