@@ -245,18 +245,18 @@ export class DollService {
         context = "화남/진정"; 
         emotion = "화남"; 
         action = 3;
-      } else if (userSttText.includes('배고') || userSttText.includes('밥') || userSttText.includes('먹어')) {
+      } else if (userSttText.includes('배고') || userSttText.includes('밥') || userSttText.includes('먹')) {
         selectedReply = "배가 고픈가 보구나, 지금 먹고 싶은 음식이 뭐니";
         context = "식사/욕구"; 
         emotion = "배고픔"; 
         action = 2;
-      } else if (userSttText.includes('좋아') || userSttText.includes('고마워')) {
+      } else if (userSttText.includes('슬퍼') || userSttText.includes('속상')) {
         selectedReply = "아이 기분좋아, 고마워 민석아";
         context = "칭찬/만족"; 
         emotion = "기쁨"; 
         action = 1;
       } else {
-        selectedReply = "아이 기분좋아, 고마워 민석아";
+        selectedReply = "아야! 약간 아팠어, 조금만 살살 만져줄래?";
         context = "애착/포옹"; 
         emotion = "따뜻함"; 
         action = 1;
