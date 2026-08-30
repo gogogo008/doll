@@ -321,6 +321,7 @@ export class DollService {
         if (!aiUploadError) {
           const { data: publicUrlData } = this.supabase.storage.from('voice-bucket').getPublicUrl(aiVoiceFileName);
           aiAudioUrl = publicUrlData.publicUrl;
+          console.log(`🔊 [AI Voice URL]: ${aiAudioUrl}`);
         }
       } catch (ttsErr) {
         console.error('❌ [TTS Generation/Upload Error]:', ttsErr);
@@ -342,6 +343,7 @@ export class DollService {
           if (!uploadError) {
             const { data: publicUrlData } = this.supabase.storage.from('voice-bucket').getPublicUrl(fileName);
             audioUrl = publicUrlData.publicUrl;
+            console.log(`🎤 [User Voice URL]: ${audioUrl}`);
           }
         }
 
