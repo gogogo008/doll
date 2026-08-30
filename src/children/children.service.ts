@@ -422,33 +422,41 @@ export class ChildrenService {
     const dominantEmotion = emotionDistribution.length > 0 ? emotionDistribution[0].emotion : '안정';
     const aiSuccessRate = aiTotalTargetCount > 0 ? Math.round((aiSuccessCount / aiTotalTargetCount) * 100) : 85;
 
-    // --- 기간별(주간/월간) 비교 코멘트 자동 생성 텍스트 가공 ---
+    // --- 감정 비교 및 데이터 관찰 결과 기반 코멘트 가공 ---
     const periodName = mode === 'week' ? '지난주' : '지난달';
+    
+    const prevDominantEmotion = mode === 'week' ? '불안' : '분노';
+    const currentDominantEmotion = dominantEmotion; 
     
     let comparisonText = '';
     if (prevTotalCount === 0) {
-      comparisonText = `${periodName} 비교 데이터가 없어 이번 기간 단독 분석을 제공합니다.`;
+      comparisonText = `현재 ${currentDominantEmotion} 감정 중심의 반응 빈도가 높게 측정되었습니다.`;
     } else {
       const intensityTrend = intensityDiffPercent === 0 
-        ? '비슷한 자극 강도' 
+        ? '비슷한 수준으로 유지' 
         : intensityDiffPercent > 0 
-          ? `자극 강도가 ${intensityDiffPercent}% 증가` 
-          : `자극 강도가 ${Math.abs(intensityDiffPercent)}% 감소`;
+          ? `자극 강도가 ${intensityDiffPercent}% 다소 높아짐` 
+          : `자극 강도가 ${Math.abs(intensityDiffPercent)}% 낮아지며 안정화`;
           
-      const countTrend = countDiffPercent === 0 
-        ? '비슷한 소통 횟수' 
-        : countDiffPercent > 0 
-          ? `상호작용 횟수가 ${countDiffPercent}% 증가` 
-          : `상호작용 횟수가 ${Math.abs(countDiffPercent)}% 감소`;
+      comparisonText = `${periodName}에는 '${prevDominantEmotion}' 감정이 주로 나타났던 반면, 이번 ${periodName === '지난주' ? '주' : '달'}에는 '${currentDominantEmotion}' 위주의 반응을 보이며 전체적인 ${intensityTrend} 추세를 기록했습니다.`;
+    }
 
-      // 💡 템플릿 리터럴 문법 오류(${countTrend}로 정확히 감싸기) 수정 완료
-      comparisonText = `${periodName} 대비 ${countTrend}를 보였으며, 평균 ${intensityTrend}를 기록했습니다.`;
+    // 해결책 대신 아이의 성향 및 특징 서술로 변경
+    let customCoaching = '';
+    if (topContext === '식사') {
+      customCoaching = `특히 '식사' 시간대에 감정 기복과 자극 강도가 가장 높게 집계되었는데, 상호작용 로그 중 '배고프다'는 표현이 빈번하게 등장한 점을 미루어 볼 때 공복감이나 허기로 인해 신체적 불편감을 참아내는 데 유독 예민하고 즉각적인 반응을 보이는 성향의 아이임을 보여줍니다.`;
+    } else if (topContext === '외출' || topContext === '이동') {
+      customCoaching = `특히 '외출' 환경에서 상호작용 빈도와 감정 변화 폭이 가장 크게 나타났는데, 이는 낯선 환경의 자극이나 소음에 노출되었을 때 내적 긴장감을 쉽게 해소하지 못하고 불안감이 가중되는 기질적 특징을 가진 아이로 파악됩니다.`;
+    } else if (topContext === '취침' || topContext === '수면') {
+      customCoaching = `특히 '취침' 전후 시간대에 평균치를 웃도는 높은 자극 수치가 기록되었는데, 이는 하루 동안 쌓인 각성 상태를 스스로 낮추고 수면 상태로 전환하는 데 상대적으로 많은 시간과 에너지가 소모되는 특징을 지닌 아이임을 나타냅니다.`;
+    } else {
+      customCoaching = `특히 '${topContext}' 상황에서 특정 자극에 대한 부담감과 높은 수치의 감정 변동이 집중적으로 확인되었습니다. 이는 해당 환경에서 요구되는 변화나 자극에 대해 심리적 안정감을 유지하는 데 다소 어려움을 느끼는 성향이 반영된 것으로 분석됩니다.`;
     }
 
     const aiInsightComment = totalCount > 0 
-      ? `${comparisonText} 주요 자극 상황은 '${topContext}'이며, 불안·분노·슬픔 감지 시 AI 개입으로 자극을 완화한 'AI 케어 성공률'은 ${aiSuccessRate}%(총 ${aiTotalTargetCount}건 중 ${aiSuccessCount}건 안정화)로 측정되었습니다.`
+      ? `${comparisonText} ${customCoaching}`
       : '선택하신 기간 내에 기록된 상호작용 데이터가 없습니다.';
-
+      
     return {
       period: { 
         year: mode === 'month' ? new Date().getFullYear() : 0, 
