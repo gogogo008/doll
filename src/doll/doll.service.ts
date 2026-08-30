@@ -245,7 +245,7 @@ export class DollService {
         context = "화남/진정"; 
         emotion = "화남"; 
         action = 3;
-      } else if (userSttText.includes('배고파') || userSttText.includes('밥') || userSttText.includes('먹어')) {
+      } else if (userSttText.includes('배고') || userSttText.includes('밥') || userSttText.includes('먹어')) {
         selectedReply = "배가 고픈가 보구나, 지금 먹고 싶은 음식이 뭐니";
         context = "식사/욕구"; 
         emotion = "배고픔"; 
@@ -256,7 +256,7 @@ export class DollService {
         emotion = "기쁨"; 
         action = 1;
       } else {
-        selectedReply = "참 따뜻하다 민석아";
+        selectedReply = "아이 기분좋아, 고마워 민석아";
         context = "애착/포옹"; 
         emotion = "따뜻함"; 
         action = 1;
