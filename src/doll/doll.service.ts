@@ -244,7 +244,7 @@ export class DollService {
       let emotion = '';
       let action = 1;
 
-      if (maxIntensity > 1200) {
+      if (maxIntensity > 1900) {
         selectedReply = "강한 자극";
         aiAudioUrl = VOICE_URLS.intense;
         context = "강한 자극";
