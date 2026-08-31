@@ -244,7 +244,7 @@ export class DollService {
       let emotion = '';
       let action = 1;
 
-      if (maxIntensity > 150) {
+      if (maxIntensity > 1000) {
         selectedReply = "강한 자극";
         aiAudioUrl = VOICE_URLS.intense;
         context = "강한 자극";
@@ -256,7 +256,7 @@ export class DollService {
         context = "화남/진정";
         emotion = "화남";
         action = 3;
-      } else if (userSttText.includes('배고파') || userSttText.includes('밥') || userSttText.includes('먹어')) {
+      } else if (userSttText.includes('배고') || userSttText.includes('밥') || userSttText.includes('먹어')) {
         selectedReply = "배고프다";
         aiAudioUrl = VOICE_URLS.hungry;
         context = "식사/욕구";
@@ -268,7 +268,7 @@ export class DollService {
         context = "애착/포옹";
         emotion = "따뜻함";
         action = 1;
-      } else if (userSttText.includes('좋아') || userSttText.includes('고마워')) {
+      } else if (userSttText.includes('좋아') || userSttText.includes('고마')) {
         selectedReply = "기분 좋아";
         aiAudioUrl = VOICE_URLS.happy;
         context = "칭찬/만족";
