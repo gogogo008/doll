@@ -246,7 +246,7 @@ export class DollService {
 
       if (maxIntensity > 1900) {
         selectedReply = "강한 자극";
-        aiAudioUrl = VOICE_URLS.intense;
+        aiAudioUrl = VOICE_URLS.happy;
         context = "강한 자극";
         emotion = "놀람/강한자극";
         action = 3;
@@ -290,7 +290,7 @@ export class DollService {
         candidates: []
       };
     }
-    
+
 
     // 3. 사용자 음성 업로드, DB 저장, 임베딩 업데이트 등은 백그라운드로 분리
     setImmediate(async () => {
