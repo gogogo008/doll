@@ -131,16 +131,15 @@ export class DollService {
     }
 
     const activeSensors: string[] = [];
-    maxPressurePerSensor.forEach((val, idx) => {
-      if (val >= 10 && SENSOR_NAMES[idx]) {
-        let level = '약함';
-        if (val > 300) level = '매우 강함';
-        else if (val > 100) level = '강함';
-        else if (val > 40) level = '보통';
+maxPressurePerSensor.forEach((val, idx) => {
+  if (val >= 500 && SENSOR_NAMES[idx]) { // 👈 최소 감지선을 500으로 상향
+    let level = '보통';
+    if (val > 2200) level = '매우 강함'; // 1900~2000대 임계값에 맞춰 조절
+    else if (val > 1500) level = '강함';
 
-        activeSensors.push(`- ${SENSOR_NAMES[idx]}: 최고 변화량 ${val} (${level})`);
-      }
-    });
+    activeSensors.push(`- ${SENSOR_NAMES[idx]}: 최고 변화량 ${val} (${level})`);
+  }
+});
 
     const sensorSummary = activeSensors.length > 0
       ? activeSensors.join('\n')
@@ -205,7 +204,7 @@ export class DollService {
       maxIntensity = sensorResult.maxIntensity;
 
       const hasAudio = pcmAudioBuffer && pcmAudioBuffer.length > 0;
-      const hasTouch = maxIntensity > 10;
+      const hasTouch = maxIntensity > 500;
 
       if (!hasAudio && !hasTouch) {
         return { 
